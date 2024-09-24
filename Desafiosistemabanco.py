@@ -1,4 +1,6 @@
 # Sistema Bancário
+# Implementação do exemplo no Curso (feito validação cpf, permite emitir o extrato por cpf, atualização do saldo)
+
 import textwrap
 import re
 from datetime import date, datetime
@@ -15,9 +17,6 @@ def valida_cpf(cpf):
         print("Digite somente Números")
       
     numeros = [int(digito) for digito in cpf if digito.isdigit()]
-    
-    #Verifica a estrutura do CPF (111.222.333-44)
-    #if re.match(r'\d{3}\.\d{3}\.\d{3}-\d{2}', cpf):
     
     formatacao = True
   
@@ -40,11 +39,10 @@ def valida_cpf(cpf):
         else:
             print(f"O CPF {cpf} não é válido... Tente outro CPF...")
             cpf_ok = 0
-            input("Pressione Enter p/ continuar...")
+            
     else:
         print(print(f"O CPF {cpf} não é válido... Tente outro CPF..."))
         cpf_ok = 0
-        input("Pressione Enter p/ continuar...")
     return cpf_ok
 
 
@@ -58,7 +56,6 @@ def cadastrar_usuario(cpf, usuarios):
 
     if usuario:
         print("Já existe usuário com esse CPF! ")
-        input("Pressione Enter p/ continuar...")
         return
 
     nome = input("Informe o nome completo: ")
@@ -68,7 +65,6 @@ def cadastrar_usuario(cpf, usuarios):
     usuarios.append({"nome": nome, "data_nascimento": data_nascimento, "cpf": cpf, "endereco": endereco})
 
     print("=== Usuário criado com sucesso! ===")
-    input("Pressione Enter p/ continuar...")
 
 def pesquisar_usuario(cpf, usuarios):
     usuarios_filtrados = [usuario for usuario in usuarios if usuario["cpf"] == cpf]
@@ -86,17 +82,14 @@ def cadastrar_conta(cpf, agencia, numero_conta, saldo_conta, numero_saques, usua
         return {"cpf": cpf, "agencia": agencia, "numero_conta": numero_conta, "saldo_conta": saldo_conta, "numero_saques": numero_saques, "usuario": usuario}
 
     print("Usuário não encontrado! Favor Cadastrar antes da Conta !")
-    input("Pressione Enter p/ continuar...")
 
-def atualizar_conta(cpf, saldo_conta, numero_saques, usuarios):
-    usuario = pesquisar_usuario(cpf, usuarios)
+# Função para atualizar o saldo e o numero de saques
+def atualizar_conta(cpf, novo_saldo, numero_saques, contas):
+    for conta in contas:
+        if conta["cpf"] == cpf:
+            conta["saldo_conta"] = novo_saldo
+            conta["numero_saques"] = numero_saques
 
-    if usuario:
-        print("\n=== Conta criada com sucesso! ===")
-        return {"cpf": cpf, "saldo_conta": saldo_conta, "numero_saques": numero_saques, "usuario": usuario}
-
-    print("Usuário não encontrado! Favor Cadastrar antes da Conta !")
-    input("Pressione Enter p/ continuar...")
 
 def listar_contas(contas):
     for conta in contas:
@@ -109,55 +102,72 @@ def listar_contas(contas):
         print("=" * 80)
         print(textwrap.dedent(linha))
 
-def emitir_extrato(movimento, contas):
+def cadastrar_lcto(nro_lcto, cpf, data_str, valor):
+    
+    return {"nro_lcto": nro_lcto, "cpf": cpf, "data": data_str, "valor": valor}
+   
+# Função para pesquisar registros por CPF
+def pesquisar_por_cpf(cpf, movimentos):
+   cpf_pesquisa = int(cpf) 
+   registros = [movimento for movimento in movimentos if movimento["cpf"] == cpf]
+   if registros:
+       return registros
+
+def emitir_extrato(movimentos, contas):
     # pede o cpf para imprimir somente o extrato do cpf requerido
     conta_ok = False
-    cpf = int(input("Informe o CPF (somente números): "))
+    cpf = input("Informe o CPF (somente números): ")
     cpf_ok = valida_cpf(cpf)
     if cpf_ok:
-        # procura pela conta com o cpf do usuario
-        conta_ok = [conta for conta in contas if conta['cpf'] == cpf ]
-
-        if not conta_ok:
-            print("Conta não encontrada com esse número!")
-            return
-    
         extrato = ""
+        saldo_atual = 0.00
+
+        # Exibir o Extrato
+        print("=" * 60)
+        extrato += f"------------------------- EXTRATO --------------------------\n"
+        extrato += f"Nr| Data        | Cpf       | Valor Op.| Saldo           |\n"
+        for movimento in movimentos:
+            if movimento["cpf"] == cpf:
+               
+               valor = movimento["valor"]
+               saldo_atual += valor 
+               extrato += f"{movimento["nro_lcto"]} {movimento["data"]} {movimento["cpf"]} R$ {movimento["valor"]:.2f} Saldo: R$ {saldo_atual:.2f}\n"
+
+        print(extrato)   
+        print("=" * 60)
+
         if not movimento:
-            extrato = "Não houve movimentações no Período!."
-        else:
-            saldo_atual = 0
-            for lcto, cpf in movimento.items():
-                if cpf['cpf'] == cpf:
-                    extrato += (f"\n{data_str} {lcto['Cpf']}:  R$ {lcto['valor']:.2f}\n")
-                    saldo_atual += {lcto[valor]}
-                    print(saldo_atual)
+            print("Não existe movimentação para essa Conta!")
+        return
 
-        print(extrato)
-        print(f"\nSaldo:\n\tR$ {saldo_atual:.2f}")
-        print("==========================================")
-
-
+def validar_entrada_numero(input_str):
+    nro_ok = False
+    try:
+        # Tenta converter o input para float
+        float(input_str)
+        nro_ok = True
+    except ValueError:
+        nro_ok = False
+    return
 def main():
     
     LIMITE_SAQUES_DIARIO = 3
     AGENCIA = "0001"
-   
+
+    nro_ok = False
     conta_filtrada = False
     
     extrato = ""
-    chave_cpf = ""
-    chave_cta = ""
     saldo = 0
     limite_saque = 500
     numero_saques = 0
     numero_deposito = 0
-    nro_lcto = 0
+    nro_lcto = 0   # utilizado no extrato
     agencia = AGENCIA
     nro_conta = 0
     usuarios = []
     contas = []
-    movimento = {}
+    movimentos = []
 
     menu = """
 
@@ -181,7 +191,6 @@ def main():
             cpf = str(input("Informe o CPF (somente números): "))
             saldo_conta = 0.00
             cpf_ok = valida_cpf(cpf)
-            
             if cpf_ok:  # se cpf foi validado 
                 pesquisar_usuario(cpf, usuarios)
                 # procura pela conta com o cpf do usuario
@@ -189,32 +198,33 @@ def main():
                 for conta in contas:
                     if conta['cpf'] == cpf:
                         conta_filtrada = True
-                        print(f"conta: {conta}")
-                        print(conta['saldo_conta'])
-                        print(f"Conta: {conta['numero_conta']}")
-                        saldo_conta = float(conta['saldo_conta'])   
-                           
+                                   
                 if not conta_filtrada:
                     print("Conta não encontrada!")
                                 
                 if conta_filtrada: # se achou a conta entao pede o valor do depósito
+                    numero_saques = conta["numero_saques"]
+                    saldo_conta = float(conta['saldo_conta'])   
                     
-                    numero_conta = conta['numero_conta']
                     print(f"saldo: {saldo_conta}")
-                    valor = float(input("Informe o Valor do Depósito: "))
-                    if valor > 0 :
-                        nro_lcto += 1  #numero chave extrato
-                        
-                        saldo_conta += valor
-                        
-                        #conta = cadastrar_conta(cpf, AGENCIA, numero_conta, saldo_conta,numero_saques, usuarios)
-                        conta = atualizar_conta(cpf, saldo_conta, numero_saques, usuarios)
-                        contas.append(conta)
-                    
-                        #  guarda o nro-lcto, cpf, a data e valor no dicionario de dados para poder emitir o extrato
-                        movimento = {"nro_lcto": nro_lcto, "cpf": cpf, "data": data_str, "valor": valor}
+                    print(f"Conta: {conta['numero_conta']}")
+                    valor = input("Informe o Valor do Depósito: ")
+                    validar_entrada_numero(valor)
 
-                        extrato += (f"Cpf: {cpf} {data_str} Depósito: {numero_deposito} R$ {valor:.2f}\n")
+                    if not nro_ok:
+                        print("Aceita somente números!")
+                
+                    if nro_ok and valor > 0:
+                        nro_lcto += 1  #numero chave extrato
+                        saldo_conta += valor # atualiza saldo
+                        
+                        atualizar_conta(cpf, saldo_conta, numero_saques, contas)
+                        
+                        #  guarda o nro-lcto, cpf, a data e valor no dicionario de dados para poder emitir o extrato
+                        lcto = cadastrar_lcto(nro_lcto, cpf, data_str, valor)
+                        if lcto:
+                           movimentos.append(lcto)
+                        #extrato += (f"Cpf: {cpf} {data_str} Depósito: {numero_deposito} R$ {valor:.2f}\n")
                         print(f"Valor R$ {valor:.2f} Creditado com sucesso! ")
                     else: 
                         print("Valor de Depósito precisa ser maior que Zero")
@@ -228,26 +238,26 @@ def main():
             cpf_ok = valida_cpf(cpf)
             
             if cpf_ok:
-                 # se cpf foi validado 
-                pesquisar_usuario(cpf, usuarios)
+                # se cpf foi validado 
                 # procura pela conta com o cpf do usuario
                 conta_filtrada = False
                 for conta in contas:
                     if conta['cpf'] == cpf:
                         conta_filtrada = True
-                        print(f"conta: {conta}")
-                        saldo_conta = float(conta['saldo_conta'])     
-                        numero_conta = conta['numero_conta']
-                        numero_saques = conta['numero_saques']   
-
+                                   
                 if not conta_filtrada:
                     print("Conta não encontrada!")
                                 
                 if conta_filtrada:
-                   
-                    valor = float(input("Informe o Valor do Saque: "))
-                        
-                    if valor > 0.00 and valor > saldo_conta:
+                    numero_saques = conta["numero_saques"]
+                    saldo_conta = float(conta['saldo_conta'])   
+                    
+                    valor = input("Informe o Valor do Saque: ")
+                    validar_entrada_numero(valor)
+                    if not nro_ok:
+                        print("Somente valor válido!")
+                    # validações de Saque   
+                    if nro_ok and valor > 0.00 and valor > saldo_conta:
                         print("Valor de Saldo Insuficiente!")
 
                     elif valor > float(limite_saque):  # maximo 500
@@ -257,23 +267,23 @@ def main():
                         print(f"Número de saques diário ({LIMITE_SAQUES_DIARIO}) Excedido! Tente amanhã!") 
                                 
                     else:
-                        nro_lcto += 1  #incrmenta o nro de lcto do extrato
-                        numero_saques += 1
-                        saldo_conta -= valor
-                        # Atualiza o saldo e o numero de saques na conta
-                        #conta = cadastrar_conta(cpf, AGENCIA, numero_conta, saldo_conta, numero_saques, usuarios)
-                        conta = atualizar_conta(cpf, saldo_conta, numero_saques, usuarios)
-                        contas.append(conta)
+                        nro_lcto += 1  #incrementa o nro de lcto do extrato
+                        numero_saques += 1   # atualiza nro de saques
+                        saldo_conta -= valor # atualiza saldo
                         
-                         #  guarda o nro-lcto, cpf, a data e valor no dicionario de dados para poder emitir o extrato
-                        movimento = {"nro_lcto": nro_lcto, "cpf": cpf, "data": data_str, "valor": (valor*-1)}
-
-                        print(f"Valor do Saque: R$ {valor:.2f} Bem sucedido! ")
+                        # Atualiza o saldo e o numero de saques na conta
+                        atualizar_conta(cpf, saldo_conta, numero_saques, contas)  
+                        valor = (valor*-1) #guardo o valor negativo para ficar mais facil atualizar o saldo
+                        #  guarda o nro-lcto, cpf, a data e valor no dicionario de dados para poder emitir o extrato
+                        lcto = cadastrar_lcto(nro_lcto, cpf, data_str, valor)
+                        if lcto:
+                           movimentos.append(lcto)
+                           print(f"Valor do Saque: R$ {valor:.2f} Bem sucedido! ")
                 else:
                     print("Conta inexistente!")
 
         elif opcao == "e": #Emitir Extrato
-            emitir_extrato(movimento, contas)
+            emitir_extrato(movimentos, contas)
             
         elif opcao == "u":  # Cadastrar Usuário
             
@@ -288,8 +298,8 @@ def main():
             numero_saques = 0
 
             cpf = input("Informe o CPF (somente números): ")
-            
             cpf_ok = valida_cpf(cpf)
+
             if cpf_ok:
                 numero_conta = len(contas) + 1
                 conta_filtrada = pesquisar_conta(numero_conta, contas)
@@ -297,7 +307,6 @@ def main():
                     print("Já Existe uma conta com esse cpf!")
                 else:    
                     conta = cadastrar_conta(cpf, AGENCIA, numero_conta, saldo_conta, numero_saques, usuarios)
-
                     if conta:
                         contas.append(conta)
                         print(contas)
@@ -310,6 +319,5 @@ def main():
         elif opcao == "f":
             break
  
-        #input("Pressione Enter p/ continuar...")
 main()
     
